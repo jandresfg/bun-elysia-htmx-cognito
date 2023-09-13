@@ -7,9 +7,11 @@ const app = new Elysia()
   .get("/", ({ html }) =>
     html(
       <BaseHtml>
+        <button hx-post="/clicked" hx-swap="outerHTML">
+          click me
+        </button>
       </BaseHtml>
-    )
-  )
+  .post("/clicked", () => <div>hello from server</div>)
   .listen(3333);
 
 console.log(
@@ -24,6 +26,7 @@ const BaseHtml = ({ children }: elements.Children) => `
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bun + Elysia + htmx + cognito</title>
+  <script src="https://unpkg.com/htmx.org@1.9.5"></script>
 </head>
 
 <body>${children}</body>
