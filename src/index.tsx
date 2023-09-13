@@ -4,13 +4,13 @@ import * as elements from "typed-html";
 
 const app = new Elysia()
   .use(html())
-  .get("/", ({ html }) =>
-    html(
-      <BaseHtml>
-        <button hx-post="/clicked" hx-swap="outerHTML">
-          click me
-        </button>
-      </BaseHtml>
+  .get("/", () => (
+    <BaseHtml>
+      <button hx-post="/clicked" hx-swap="outerHTML">
+        click me
+      </button>
+    </BaseHtml>
+  ))
   .post("/clicked", () => <div>hello from server</div>)
   .listen(3333);
 
