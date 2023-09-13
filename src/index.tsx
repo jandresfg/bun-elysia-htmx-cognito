@@ -6,9 +6,11 @@ const app = new Elysia()
   .use(html())
   .get("/", () => (
     <BaseHtml>
-      <button hx-post="/clicked" hx-swap="outerHTML">
-        click me
-      </button>
+      <body class="flex w-full h-screen justify-center items-center">
+        <button hx-post="/clicked" hx-swap="outerHTML">
+          click me
+        </button>
+      </body>
     </BaseHtml>
   ))
   .post("/clicked", () => <div class="text-blue-600">hello from server</div>)
@@ -30,5 +32,5 @@ const BaseHtml = ({ children }: elements.Children) => `
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="flex w-full h-screen justify-center items-center">${children}</body>
+${children}
 `;
