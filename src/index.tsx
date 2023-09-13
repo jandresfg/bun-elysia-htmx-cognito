@@ -1,13 +1,13 @@
 import html from "@elysiajs/html";
 import { Elysia } from "elysia";
+import * as elements from "typed-html";
 
 const app = new Elysia()
   .use(html())
   .get("/", ({ html }) =>
     html(
-      <baseHtml>
-        <h1>Hello jsx</h1>
-      </baseHtml>
+      <BaseHtml>
+      </BaseHtml>
     )
   )
   .listen(3333);
@@ -16,7 +16,7 @@ console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
 );
 
-const BaseHtml = ({ children }) => `
+const BaseHtml = ({ children }: elements.Children) => `
 <!DOCTYPE html>
 <html lang="en">
 
