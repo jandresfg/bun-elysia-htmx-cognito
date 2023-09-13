@@ -11,7 +11,7 @@ const app = new Elysia()
       </button>
     </BaseHtml>
   ))
-  .post("/clicked", () => <div>hello from server</div>)
+  .post("/clicked", () => <div class="text-blue-600">hello from server</div>)
   .listen(3333);
 
 console.log(
@@ -27,7 +27,8 @@ const BaseHtml = ({ children }: elements.Children) => `
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bun + Elysia + htmx + cognito</title>
   <script src="https://unpkg.com/htmx.org@1.9.5"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body>${children}</body>
+<body class="flex w-full h-screen justify-center items-center">${children}</body>
 `;
