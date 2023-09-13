@@ -6,10 +6,13 @@ const app = new Elysia()
   .use(html())
   .get("/", () => (
     <BaseHtml>
-      <body class="flex w-full h-screen justify-center items-center">
-        <button hx-post="/clicked" hx-swap="outerHTML">
-          click me
-        </button>
+      <body class="flex flex-col space-x-2 w-full h-screen justify-center items-center">
+        <h1>Bun + Elysia + htmx + cognito</h1>
+        <div class="flex flex-row space-x-3">
+          <button hx-post="/clicked" hx-swap="outerHTML">
+            click me
+          </button>
+        </div>
       </body>
     </BaseHtml>
   ))
