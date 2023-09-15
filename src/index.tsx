@@ -1,5 +1,6 @@
 import {
   CognitoIdentityProviderClient,
+  ConfirmSignUpCommand,
   InitiateAuthCommand,
   SignUpCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
@@ -20,6 +21,9 @@ const app = new Elysia()
           </button>
           <button hx-get="/sign-in" hx-target="closest div">
             sign in
+          </button>
+          <button hx-get="/confirm-email" hx-target="closest div">
+            confirm email
           </button>
         </div>
       </body>
@@ -133,6 +137,61 @@ const app = new Elysia()
         PASSWORD: password,
         SECRET_HASH: hash,
       },
+    });
+
+    try {
+      const response = await client.send(signInCommand);
+      return (
+        <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
+      );
+    } catch (error) {
+      return <div class="text-red-600">{error}</div>;
+    }
+  })
+  .get("/confirm-email", () => (
+    <form class="flex flex-col space-y-2" hx-post="/confirm-email">
+      <input
+        type="text"
+        name="email"
+        placeholder="email"
+        class="border border-black"
+      />
+      <input
+        type="text"
+        name="code"
+        placeholder="code received"
+        class="border border-black"
+      />
+      <button type="submit" class="border border-black w-fit">
+        confirm
+      </button>
+    </form>
+  ))
+  .post("/confirm-email", async ({ body }) => {
+    const { email, code } = body as { email: string; code: string };
+    if (email.length === 0) {
+      return <div class="text-red-600">email cannot be empty</div>;
+    }
+    if (code.length === 0) {
+      return <div class="text-red-600">code cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+    });
+
+    const clientSecret = process.env.AWS_COGNITO_APP_CLIENT_SECRET as string;
+    const clientId = process.env.AWS_COGNITO_APP_CLIENT_ID as string;
+    const hash = crypto
+      .createHmac("sha256", clientSecret)
+      .update(email.concat(clientId))
+      .digest("base64");
+
+    const signInCommand = new ConfirmSignUpCommand({
+      ClientId: clientId,
+      Username: email,
+      ConfirmationCode: code,
+      SecretHash: hash,
     });
 
     try {
