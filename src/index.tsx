@@ -1,7 +1,11 @@
+import {
+  CognitoIdentityProviderClient,
+  SignUpCommand,
+} from "@aws-sdk/client-cognito-identity-provider";
 import html from "@elysiajs/html";
+import crypto from "crypto";
 import { Elysia } from "elysia";
 import * as elements from "typed-html";
-import UserPool from "./UserPool";
 
 const app = new Elysia()
   .use(html())
@@ -36,27 +40,48 @@ const app = new Elysia()
       </button>
     </form>
   ))
-  .post("/sign-up", ({ body }) => {
+  .post("/sign-up", async ({ body }) => {
     const { email, password } = body as { email: string; password: string };
     if (email.length === 0) {
-      throw new Error("email cannot be empty");
+      return <div class="text-red-600">email cannot be empty</div>;
     }
     if (password.length === 0) {
-      throw new Error("password cannot be empty");
+      return <div class="text-red-600">password cannot be empty</div>;
     }
 
-    // attempt sign up
-    // this fails because client was configured with secret, see https://stackoverflow.com/a/71287987/2109083
-    UserPool.signUp(email, password, [], null, (err, result) => {
-      if (err) {
-        console.error(err);
-      }
-      console.log(result);
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
     });
 
-    return <div>sign up attempted</div>;
-  })
+    const clientSecret = process.env.AWS_COGNITO_APP_CLIENT_SECRET as string;
+    const clientId = process.env.AWS_COGNITO_APP_CLIENT_ID as string;
+    const hash = crypto
+      .createHmac("sha256", clientSecret)
+      .update(email.concat(clientId))
+      .digest("base64");
 
+    const signUpCommand = new SignUpCommand({
+      ClientId: clientId,
+      SecretHash: hash,
+      Password: password,
+      Username: email,
+      UserAttributes: [
+        {
+          Name: "email",
+          Value: email,
+        },
+      ],
+    });
+
+    try {
+      const response = await client.send(signUpCommand);
+      return (
+        <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
+      );
+    } catch (error) {
+      return <div class="text-red-600">{error}</div>;
+    }
+  })
   .listen(3333);
 
 console.log(
