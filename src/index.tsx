@@ -1,4 +1,6 @@
 import {
+  AdminConfirmSignUpCommand,
+  AdminUpdateUserAttributesCommand,
   CognitoIdentityProviderClient,
   ConfirmSignUpCommand,
   InitiateAuthCommand,
@@ -16,14 +18,33 @@ const app = new Elysia()
       <body class="flex flex-col space-x-2 w-full h-screen justify-center items-center">
         <h1>Bun + Elysia + htmx + cognito</h1>
         <div class="flex flex-row space-x-3">
-          <button hx-get="/sign-up" hx-target="closest div">
+          <button
+            hx-get="/sign-up"
+            hx-target="closest div"
+            class="border border-black"
+          >
             sign up
           </button>
-          <button hx-get="/sign-in" hx-target="closest div">
+          <button
+            hx-get="/sign-in"
+            hx-target="closest div"
+            class="border border-black"
+          >
             sign in
           </button>
-          <button hx-get="/confirm-email" hx-target="closest div">
+          <button
+            hx-get="/confirm-email"
+            hx-target="closest div"
+            class="border border-black"
+          >
             confirm email
+          </button>
+          <button
+            hx-get="/confirm-email-admin"
+            hx-target="closest div"
+            class="border border-black"
+          >
+            confirm email (admin)
           </button>
         </div>
       </body>
@@ -198,6 +219,74 @@ const app = new Elysia()
       const response = await client.send(signInCommand);
       return (
         <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
+      );
+    } catch (error) {
+      return <div class="text-red-600">{error}</div>;
+    }
+  })
+  .get("/confirm-email-admin", () => (
+    <form class="flex flex-col space-y-2" hx-post="/confirm-email-admin">
+      <input
+        type="text"
+        name="email"
+        placeholder="email"
+        class="border border-black"
+      />
+      <button type="submit" class="border border-black w-fit">
+        admin confirm
+      </button>
+    </form>
+  ))
+  .post("/confirm-email-admin", async ({ body }) => {
+    const { email } = body as { email: string };
+    if (email.length === 0) {
+      return <div class="text-red-600">email cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+      // credentials are needed only for admin commands such as the ones we're about to perform
+      credentials: {
+        accessKeyId: process.env.AWS_COGNITO_ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.AWS_COGNITO_SECRET_ACCESS_KEY as string,
+      },
+    });
+
+    const userPoolId = process.env.AWS_COGNITO_USER_POOL_ID as string;
+
+    // this confirms the sign up, but the email would still be unverified
+    const adminConfirmSignUpCommand = new AdminConfirmSignUpCommand({
+      Username: email,
+      UserPoolId: userPoolId,
+    });
+
+    // this makes the email verified
+    const adminUpdateUserAttributesCommand =
+      new AdminUpdateUserAttributesCommand({
+        Username: email,
+        UserPoolId: userPoolId,
+        UserAttributes: [
+          {
+            Name: "email_verified",
+            Value: "True",
+          },
+        ],
+      });
+
+    try {
+      const confirmSignUpResponse = await client.send(
+        adminConfirmSignUpCommand
+      );
+      const updateEmailVerifiedResponse = await client.send(
+        adminUpdateUserAttributesCommand
+      );
+      return (
+        <div class="text-green-600">
+          <h1>Confirm sign up response:</h1>
+          <pre>{JSON.stringify(confirmSignUpResponse, null, 3)}</pre>
+          <h1>Update email_verified response:</h1>
+          <pre>{JSON.stringify(updateEmailVerifiedResponse, null, 3)}</pre>
+        </div>
       );
     } catch (error) {
       return <div class="text-red-600">{error}</div>;
