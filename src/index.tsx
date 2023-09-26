@@ -49,11 +49,18 @@ const app = new Elysia()
             confirm email
           </button>
           <button
-            hx-get="/confirm-email-admin"
+            hx-get="/confirm-sign-up-admin"
             hx-target="closest div"
             class="border border-black"
           >
-            confirm email (admin)
+            confirm sign up (admin)
+          </button>
+          <button
+            hx-get="/verify-email-admin"
+            hx-target="closest div"
+            class="border border-black"
+          >
+            verify email (admin)
           </button>
         </div>
       </body>
@@ -117,7 +124,12 @@ const app = new Elysia()
         <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
       );
     } catch (error) {
-      return <div class="text-red-600">{JSON.stringify(error)}</div>;
+      return (
+        <div class="text-red-600">
+          <h1>{String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
     }
   })
   .get("/sign-up-admin", () => (
@@ -187,7 +199,12 @@ const app = new Elysia()
         </div>
       );
     } catch (error) {
-      return <div class="text-red-600">{JSON.stringify(error)}</div>;
+      return (
+        <div class="text-red-600">
+          <h1>{String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
     }
   })
   .get("/sign-in", () => (
@@ -245,7 +262,12 @@ const app = new Elysia()
         <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
       );
     } catch (error) {
-      return <div class="text-red-600">{JSON.stringify(error)}</div>;
+      return (
+        <div class="text-red-600">
+          <h1>{String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
     }
   })
   .get("/confirm-email", () => (
@@ -300,11 +322,16 @@ const app = new Elysia()
         <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
       );
     } catch (error) {
-      return <div class="text-red-600">{JSON.stringify(error)}</div>;
+      return (
+        <div class="text-red-600">
+          <h1>{String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
     }
   })
-  .get("/confirm-email-admin", () => (
-    <form class="flex flex-col space-y-2" hx-post="/confirm-email-admin">
+  .get("/confirm-sign-up-admin", () => (
+    <form class="flex flex-col space-y-2" hx-post="/confirm-sign-up-admin">
       <input
         type="text"
         name="email"
@@ -316,7 +343,7 @@ const app = new Elysia()
       </button>
     </form>
   ))
-  .post("/confirm-email-admin", async ({ body }) => {
+  .post("/confirm-sign-up-admin", async ({ body }) => {
     const { email } = body as { email: string };
     if (email.length === 0) {
       return <div class="text-red-600">email cannot be empty</div>;
@@ -339,6 +366,55 @@ const app = new Elysia()
       UserPoolId: userPoolId,
     });
 
+    try {
+      const confirmSignUpResponse = await client.send(
+        adminConfirmSignUpCommand
+      );
+      return (
+        <div class="text-green-600">
+          <h1>Admin confirm sign up response:</h1>
+          <pre>{JSON.stringify(confirmSignUpResponse, null, 3)}</pre>
+        </div>
+      );
+    } catch (error) {
+      return (
+        <div class="text-red-600">
+          <h1>{String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
+    }
+  })
+  .get("/verify-email-admin", () => (
+    <form class="flex flex-col space-y-2" hx-post="/verify-email-admin">
+      <input
+        type="text"
+        name="email"
+        placeholder="email"
+        class="border border-black"
+      />
+      <button type="submit" class="border border-black w-fit">
+        admin confirm
+      </button>
+    </form>
+  ))
+  .post("/verify-email-admin", async ({ body }) => {
+    const { email } = body as { email: string };
+    if (email.length === 0) {
+      return <div class="text-red-600">email cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+      // credentials are needed only for admin commands such as the ones we're about to perform
+      credentials: {
+        accessKeyId: process.env.AWS_COGNITO_ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.AWS_COGNITO_SECRET_ACCESS_KEY as string,
+      },
+    });
+
+    const userPoolId = process.env.AWS_COGNITO_USER_POOL_ID as string;
+
     // this makes the email verified
     const adminUpdateUserAttributesCommand =
       new AdminUpdateUserAttributesCommand({
@@ -353,22 +429,22 @@ const app = new Elysia()
       });
 
     try {
-      const confirmSignUpResponse = await client.send(
-        adminConfirmSignUpCommand
-      );
       const updateEmailVerifiedResponse = await client.send(
         adminUpdateUserAttributesCommand
       );
       return (
         <div class="text-green-600">
-          <h1>Confirm sign up response:</h1>
-          <pre>{JSON.stringify(confirmSignUpResponse, null, 3)}</pre>
-          <h1>Update email_verified response:</h1>
+          <h1>Admin update email_verified response:</h1>
           <pre>{JSON.stringify(updateEmailVerifiedResponse, null, 3)}</pre>
         </div>
       );
     } catch (error) {
-      return <div class="text-red-600">{JSON.stringify(error)}</div>;
+      return (
+        <div class="text-red-600">
+          <h1>{String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
     }
   })
   .listen(3333);
