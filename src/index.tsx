@@ -108,7 +108,7 @@ const app = new Elysia()
         <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
       );
     } catch (error) {
-      return <div class="text-red-600">{error}</div>;
+      return <div class="text-red-600">{JSON.stringify(error)}</div>;
     }
   })
   .get("/sign-in", () => (
@@ -166,7 +166,7 @@ const app = new Elysia()
         <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
       );
     } catch (error) {
-      return <div class="text-red-600">{error}</div>;
+      return <div class="text-red-600">{JSON.stringify(error)}</div>;
     }
   })
   .get("/confirm-email", () => (
@@ -221,7 +221,7 @@ const app = new Elysia()
         <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
       );
     } catch (error) {
-      return <div class="text-red-600">{error}</div>;
+      return <div class="text-red-600">{JSON.stringify(error)}</div>;
     }
   })
   .get("/confirm-email-admin", () => (
@@ -289,7 +289,7 @@ const app = new Elysia()
         </div>
       );
     } catch (error) {
-      return <div class="text-red-600">{error}</div>;
+      return <div class="text-red-600">{JSON.stringify(error)}</div>;
     }
   })
   .listen(3333);
