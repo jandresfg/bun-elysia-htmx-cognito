@@ -1,5 +1,7 @@
 import {
   AdminConfirmSignUpCommand,
+  AdminCreateUserCommand,
+  AdminSetUserPasswordCommand,
   AdminUpdateUserAttributesCommand,
   CognitoIdentityProviderClient,
   ConfirmSignUpCommand,
@@ -24,6 +26,13 @@ const app = new Elysia()
             class="border border-black"
           >
             sign up
+          </button>
+          <button
+            hx-get="/sign-up-admin"
+            hx-target="closest div"
+            class="border border-black"
+          >
+            sign up (admin)
           </button>
           <button
             hx-get="/sign-in"
@@ -106,6 +115,76 @@ const app = new Elysia()
       const response = await client.send(signUpCommand);
       return (
         <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
+      );
+    } catch (error) {
+      return <div class="text-red-600">{JSON.stringify(error)}</div>;
+    }
+  })
+  .get("/sign-up-admin", () => (
+    <form class="flex flex-col space-y-2" hx-post="/sign-up-admin">
+      <input
+        type="text"
+        name="email"
+        placeholder="email"
+        class="border border-black"
+      />
+      <input
+        type="text"
+        name="password"
+        placeholder="password"
+        class="border border-black"
+      />
+      <button type="submit" class="border border-black w-fit">
+        admin sign-up
+      </button>
+    </form>
+  ))
+  .post("/sign-up-admin", async ({ body }) => {
+    const { email, password } = body as { email: string; password: string };
+    if (email.length === 0) {
+      return <div class="text-red-600">email cannot be empty</div>;
+    }
+    if (password.length === 0) {
+      return <div class="text-red-600">password cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+      // credentials are needed only for admin commands such as the ones we're about to perform
+      credentials: {
+        accessKeyId: process.env.AWS_COGNITO_ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.AWS_COGNITO_SECRET_ACCESS_KEY as string,
+      },
+    });
+
+    const signUpCommand = new AdminCreateUserCommand({
+      UserPoolId: process.env.AWS_COGNITO_USER_POOL_ID as string,
+      Username: email,
+      MessageAction: "SUPPRESS",
+      UserAttributes: [
+        {
+          Name: "email",
+          Value: email,
+        },
+      ],
+    });
+    const setPasswordCommand = new AdminSetUserPasswordCommand({
+      Password: password,
+      Username: email,
+      UserPoolId: process.env.AWS_COGNITO_USER_POOL_ID as string,
+      Permanent: true,
+    });
+
+    try {
+      const signUpResponse = await client.send(signUpCommand);
+      const setPasswordResponse = await client.send(setPasswordCommand);
+      return (
+        <div class="text-green-600">
+          <h1>Sign up response:</h1>
+          <pre>{JSON.stringify(signUpResponse, null, 3)}</pre>
+          <h1>Set password response:</h1>
+          <pre>{JSON.stringify(setPasswordResponse, null, 3)}</pre>
+        </div>
       );
     } catch (error) {
       return <div class="text-red-600">{JSON.stringify(error)}</div>;
