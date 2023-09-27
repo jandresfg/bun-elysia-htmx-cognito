@@ -62,6 +62,13 @@ const app = new Elysia()
           >
             verify email (admin)
           </button>
+          <button
+            hx-get="/change-password"
+            hx-target="closest div"
+            class="border border-black"
+          >
+            change password
+          </button>
         </div>
       </body>
     </BaseHtml>
@@ -442,6 +449,107 @@ const app = new Elysia()
       return (
         <div class="text-red-600">
           <h1>{String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
+    }
+  })
+  .get("/change-password", () => (
+    <form class="flex flex-col space-y-2" hx-post="/change-password">
+      <input
+        type="text"
+        name="email"
+        placeholder="email"
+        class="border border-black"
+      />
+      <input
+        type="text"
+        name="oldPassword"
+        placeholder="old password"
+        class="border border-black"
+      />
+      <input
+        type="text"
+        name="newPassword"
+        placeholder="new password"
+        class="border border-black"
+      />
+      <button type="submit" class="border border-black w-fit">
+        change password
+      </button>
+    </form>
+  ))
+  .post("/change-password", async ({ body }) => {
+    const { email, oldPassword, newPassword } = body as {
+      email: string;
+      oldPassword: string;
+      newPassword: string;
+    };
+    if (email.length === 0) {
+      return <div class="text-red-600">email cannot be empty</div>;
+    }
+    if (oldPassword.length === 0) {
+      return <div class="text-red-600">old password cannot be empty</div>;
+    }
+    if (newPassword.length === 0) {
+      return <div class="text-red-600">new password cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+      // credentials are needed only for admin commands such as the ones we're about to perform
+      credentials: {
+        accessKeyId: process.env.AWS_COGNITO_ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.AWS_COGNITO_SECRET_ACCESS_KEY as string,
+      },
+    });
+
+    const hash = crypto
+      .createHmac("sha256", process.env.AWS_COGNITO_APP_CLIENT_SECRET as string)
+      .update(email.concat(process.env.AWS_COGNITO_APP_CLIENT_ID as string))
+      .digest("base64");
+
+    const signInCommand = new InitiateAuthCommand({
+      ClientId: process.env.AWS_COGNITO_APP_CLIENT_ID as string,
+      AuthFlow: "USER_PASSWORD_AUTH",
+      AuthParameters: {
+        USERNAME: email,
+        PASSWORD: oldPassword,
+        SECRET_HASH: hash,
+      },
+    });
+
+    let signInResponse;
+    try {
+      signInResponse = await client.send(signInCommand);
+    } catch (error) {
+      return (
+        <div class="text-red-600">
+          <h1>Error validating old password: {String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
+    }
+
+    const setPasswordCommand = new AdminSetUserPasswordCommand({
+      Password: newPassword,
+      Username: email,
+      UserPoolId: process.env.AWS_COGNITO_USER_POOL_ID as string,
+      Permanent: true,
+    });
+
+    try {
+      const setPasswordResponse = await client.send(setPasswordCommand);
+      return (
+        <div class="text-green-600">
+          <h1>Set password response:</h1>
+          <pre>{JSON.stringify(setPasswordResponse, null, 3)}</pre>
+        </div>
+      );
+    } catch (error) {
+      return (
+        <div class="text-red-600">
+          <h1>Error setting new password: {String(error)}</h1>
           <pre>{JSON.stringify(error, null, 3)}</pre>
         </div>
       );
