@@ -1,6 +1,7 @@
 import {
   AdminConfirmSignUpCommand,
   AdminCreateUserCommand,
+  AdminInitiateAuthCommand,
   AdminSetUserPasswordCommand,
   AdminUpdateUserAttributesCommand,
   CognitoIdentityProviderClient,
@@ -40,6 +41,13 @@ const app = new Elysia()
             class="border border-black"
           >
             sign in
+          </button>
+          <button
+            hx-get="/sign-in-admin"
+            hx-target="closest div"
+            class="border border-black"
+          >
+            sign in (admin)
           </button>
           <button
             hx-get="/confirm-email"
@@ -256,6 +264,75 @@ const app = new Elysia()
     const signInCommand = new InitiateAuthCommand({
       ClientId: clientId,
       AuthFlow: "USER_PASSWORD_AUTH",
+      AuthParameters: {
+        USERNAME: email,
+        PASSWORD: password,
+        SECRET_HASH: hash,
+      },
+    });
+
+    try {
+      const response = await client.send(signInCommand);
+      return (
+        <pre class="text-green-600">{JSON.stringify(response, null, 3)}</pre>
+      );
+    } catch (error) {
+      return (
+        <div class="text-red-600">
+          <h1>{String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
+    }
+  })
+  .get("/sign-in-admin", () => (
+    <form class="flex flex-col space-y-2" hx-post="/sign-in-admin">
+      <input
+        type="text"
+        name="email"
+        placeholder="email"
+        class="border border-black"
+      />
+      <input
+        type="text"
+        name="password"
+        placeholder="password"
+        class="border border-black"
+      />
+      <button type="submit" class="border border-black w-fit">
+        sign-in (admin)
+      </button>
+    </form>
+  ))
+  .post("/sign-in-admin", async ({ body }) => {
+    const { email, password } = body as { email: string; password: string };
+    if (email.length === 0) {
+      return <div class="text-red-600">email cannot be empty</div>;
+    }
+    if (password.length === 0) {
+      return <div class="text-red-600">password cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+      // credentials are needed only for admin commands such as the ones we're about to perform
+      credentials: {
+        accessKeyId: process.env.AWS_COGNITO_ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.AWS_COGNITO_SECRET_ACCESS_KEY as string,
+      },
+    });
+
+    const clientSecret = process.env.AWS_COGNITO_APP_CLIENT_SECRET as string;
+    const clientId = process.env.AWS_COGNITO_APP_CLIENT_ID as string;
+    const hash = crypto
+      .createHmac("sha256", clientSecret)
+      .update(email.concat(clientId))
+      .digest("base64");
+
+    const signInCommand = new AdminInitiateAuthCommand({
+      UserPoolId: process.env.AWS_COGNITO_USER_POOL_ID,
+      ClientId: clientId,
+      AuthFlow: "ADMIN_USER_PASSWORD_AUTH",
       AuthParameters: {
         USERNAME: email,
         PASSWORD: password,
