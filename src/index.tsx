@@ -1,6 +1,7 @@
 import {
   AdminConfirmSignUpCommand,
   AdminCreateUserCommand,
+  AdminGetUserCommand,
   AdminInitiateAuthCommand,
   AdminSetUserPasswordCommand,
   AdminUpdateUserAttributesCommand,
@@ -76,6 +77,13 @@ const app = new Elysia()
             class="border border-black"
           >
             change password
+          </button>
+          <button
+            hx-get="/get-user-admin"
+            hx-target="closest div"
+            class="border border-black"
+          >
+            get user (admin)
           </button>
         </div>
       </body>
@@ -627,6 +635,58 @@ const app = new Elysia()
       return (
         <div class="text-red-600">
           <h1>Error setting new password: {String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
+    }
+  })
+  .get("/get-user-admin", () => (
+    <form class="flex flex-col space-y-2" hx-post="/get-user-admin">
+      <input
+        type="text"
+        name="email"
+        placeholder="email"
+        class="border border-black"
+      />
+      <button type="submit" class="border border-black w-fit">
+        get user
+      </button>
+    </form>
+  ))
+  .post("/get-user-admin", async ({ body }) => {
+    const { email } = body as {
+      email: string;
+    };
+    if (email.length === 0) {
+      return <div class="text-red-600">email cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+      // credentials are needed only for admin commands such as the ones we're about to perform
+      credentials: {
+        accessKeyId: process.env.AWS_COGNITO_ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.AWS_COGNITO_SECRET_ACCESS_KEY as string,
+      },
+    });
+
+    const getUserCommand = new AdminGetUserCommand({
+      Username: email,
+      UserPoolId: process.env.AWS_COGNITO_USER_POOL_ID as string,
+    });
+
+    try {
+      const getUserResponse = await client.send(getUserCommand);
+      return (
+        <div class="text-green-600">
+          <h1>Get user response:</h1>
+          <pre>{JSON.stringify(getUserResponse, null, 3)}</pre>
+        </div>
+      );
+    } catch (error) {
+      return (
+        <div class="text-red-600">
+          <h1>Error getting user: {String(error)}</h1>
           <pre>{JSON.stringify(error, null, 3)}</pre>
         </div>
       );
