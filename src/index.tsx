@@ -85,6 +85,13 @@ const app = new Elysia()
           >
             get user (admin)
           </button>
+          <button
+            hx-get="/refresh-token"
+            hx-target="closest div"
+            class="border border-black"
+          >
+            refresh token
+          </button>
         </div>
       </body>
     </BaseHtml>
@@ -687,6 +694,75 @@ const app = new Elysia()
       return (
         <div class="text-red-600">
           <h1>Error getting user: {String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
+    }
+  })
+  .get("/refresh-token", () => (
+    <form class="flex flex-col space-y-2" hx-post="/refresh-token">
+      <input
+        type="text"
+        name="sub"
+        placeholder="sub"
+        class="border border-black"
+      />
+      <input
+        type="text"
+        name="refreshToken"
+        placeholder="refresh token"
+        class="border border-black"
+      />
+      <button type="submit" class="border border-black w-fit">
+        refresh token
+      </button>
+    </form>
+  ))
+  .post("/refresh-token", async ({ body }) => {
+    const { sub, refreshToken } = body as {
+      sub: string;
+      refreshToken: string;
+    };
+    if (refreshToken.length === 0) {
+      return <div class="text-red-600">refresh token cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+      // credentials are needed only for admin commands such as the ones we're about to perform
+      credentials: {
+        accessKeyId: process.env.AWS_COGNITO_ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.AWS_COGNITO_SECRET_ACCESS_KEY as string,
+      },
+    });
+
+    const hash = crypto
+      .createHmac("sha256", process.env.AWS_COGNITO_APP_CLIENT_SECRET as string)
+      .update(sub.concat(process.env.AWS_COGNITO_APP_CLIENT_ID as string))
+      .digest("base64");
+
+    const refreshTokenCommand = new AdminInitiateAuthCommand({
+      AuthFlow: "REFRESH_TOKEN_AUTH",
+      ClientId: process.env.AWS_COGNITO_APP_CLIENT_ID as string,
+      UserPoolId: process.env.AWS_COGNITO_USER_POOL_ID as string,
+      AuthParameters: {
+        REFRESH_TOKEN: refreshToken,
+        SECRET_HASH: hash,
+      },
+    });
+
+    try {
+      const refreshTokenResponse = await client.send(refreshTokenCommand);
+      return (
+        <div class="text-green-600">
+          <h1>refresh token response:</h1>
+          <pre>{JSON.stringify(refreshTokenResponse, null, 3)}</pre>
+        </div>
+      );
+    } catch (error) {
+      return (
+        <div class="text-red-600">
+          <h1>Error refreshing token: {String(error)}</h1>
           <pre>{JSON.stringify(error, null, 3)}</pre>
         </div>
       );
