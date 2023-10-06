@@ -8,6 +8,7 @@ import {
   CognitoIdentityProviderClient,
   ConfirmSignUpCommand,
   InitiateAuthCommand,
+  RevokeTokenCommand,
   SignUpCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import html from "@elysiajs/html";
@@ -91,6 +92,13 @@ const app = new Elysia()
             class="border border-black"
           >
             refresh token
+          </button>
+          <button
+            hx-get="/revoke-token"
+            hx-target="closest div"
+            class="border border-black"
+          >
+            revoke token
           </button>
         </div>
       </body>
@@ -769,6 +777,54 @@ const app = new Elysia()
       return (
         <div class="text-red-600">
           <h1>Error refreshing token: {String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
+    }
+  })
+  .get("/revoke-token", () => (
+    <form class="flex flex-col space-y-2" hx-post="/revoke-token">
+      <input
+        type="text"
+        name="refreshToken"
+        placeholder="refresh token"
+        class="border border-black"
+      />
+      <button type="submit" class="border border-black w-fit">
+        revoke token
+      </button>
+    </form>
+  ))
+  .post("/revoke-token", async ({ body }) => {
+    const { refreshToken } = body as {
+      refreshToken: string;
+    };
+    if (refreshToken.length === 0) {
+      return <div class="text-red-600">refresh token cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+    });
+
+    const revokeTokenCommand = new RevokeTokenCommand({
+      ClientId: process.env.AWS_COGNITO_APP_CLIENT_ID as string,
+      ClientSecret: process.env.AWS_COGNITO_APP_CLIENT_SECRET as string,
+      Token: refreshToken,
+    });
+
+    try {
+      const revokeTokenResponse = await client.send(revokeTokenCommand);
+      return (
+        <div class="text-green-600">
+          <h1>revoke token response:</h1>
+          <pre>{JSON.stringify(revokeTokenResponse, null, 3)}</pre>
+        </div>
+      );
+    } catch (error) {
+      return (
+        <div class="text-red-600">
+          <h1>Error revoking token: {String(error)}</h1>
           <pre>{JSON.stringify(error, null, 3)}</pre>
         </div>
       );
