@@ -8,7 +8,8 @@
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.410.0",
     "@elysiajs/html": "^0.6.5",
-    "elysia": "latest"
+    "elysia": "latest",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "bun-types": "latest",
