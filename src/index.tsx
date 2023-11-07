@@ -100,6 +100,13 @@ const app = new Elysia()
           >
             revoke token
           </button>
+          <button
+            hx-get="/passwordless-sign-in"
+            hx-target="closest div"
+            class="border border-black"
+          >
+            passwordless sign in (admin)
+          </button>
         </div>
       </body>
     </BaseHtml>
@@ -825,6 +832,83 @@ const app = new Elysia()
       return (
         <div class="text-red-600">
           <h1>Error revoking token: {String(error)}</h1>
+          <pre>{JSON.stringify(error, null, 3)}</pre>
+        </div>
+      );
+    }
+  })
+  .get("/passwordless-sign-in", () => (
+    <>
+      <form class="flex flex-col space-y-2" hx-post="/passwordless-sign-in">
+        <div>
+          Make sure you have set up the Define auth challenge Lambda trigger and
+          other user pool configurations (
+          <a
+            class="text-blue-600"
+            href="https://medium.com/@phamduchoang.eee/aws-cognito-sign-in-passwordless-cfe6eb7f61b4"
+          >
+            more details
+          </a>
+          )
+        </div>
+        <input
+          type="text"
+          name="email"
+          placeholder="email"
+          class="border border-black"
+        />
+        <button type="submit" class="border border-black w-fit">
+          passwordless sign in (admin)
+        </button>
+      </form>
+    </>
+  ))
+  .post("/passwordless-sign-in", async ({ body }) => {
+    const { email } = body as {
+      email: string;
+    };
+    if (email.length === 0) {
+      return <div class="text-red-600">email cannot be empty</div>;
+    }
+
+    const client = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION,
+      // credentials are needed only for admin commands such as the ones we're about to perform
+      credentials: {
+        accessKeyId: process.env.AWS_COGNITO_ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.AWS_COGNITO_SECRET_ACCESS_KEY as string,
+        sessionToken: process.env.AWS_SESSION_TOKEN as string,
+      },
+    });
+    const hash = crypto
+      .createHmac("sha256", process.env.AWS_COGNITO_APP_CLIENT_SECRET as string)
+      .update(email.concat(process.env.AWS_COGNITO_APP_CLIENT_ID as string))
+      .digest("base64");
+
+    const passwordlessSignInCommand = new AdminInitiateAuthCommand({
+      UserPoolId: process.env.AWS_COGNITO_USER_POOL_ID,
+      ClientId: process.env.AWS_COGNITO_APP_CLIENT_ID,
+      AuthFlow: "CUSTOM_AUTH",
+      AuthParameters: {
+        USERNAME: email,
+        SECRET_HASH: hash,
+      },
+    });
+
+    try {
+      const passwordlessSignInResponse = await client.send(
+        passwordlessSignInCommand
+      );
+      return (
+        <div class="text-green-600">
+          <h1>passwordless sign in response:</h1>
+          <pre>{JSON.stringify(passwordlessSignInResponse, null, 3)}</pre>
+        </div>
+      );
+    } catch (error) {
+      return (
+        <div class="text-red-600">
+          <h1>Error doing passwordless sign in: {String(error)}</h1>
           <pre>{JSON.stringify(error, null, 3)}</pre>
         </div>
       );
