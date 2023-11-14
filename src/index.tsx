@@ -3,6 +3,7 @@ import {
   AdminCreateUserCommand,
   AdminGetUserCommand,
   AdminInitiateAuthCommand,
+  AdminInitiateAuthCommandOutput,
   AdminSetUserPasswordCommand,
   AdminUpdateUserAttributesCommand,
   CognitoIdentityProviderClient,
@@ -12,30 +13,56 @@ import {
   SignUpCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { Elysia } from "elysia";
-import { cookie } from "@elysiajs/cookie";
+import { cookie, SetCookieOptions } from "@elysiajs/cookie";
 import { html } from "@elysiajs/html";
 import crypto from "crypto";
 import * as elements from "typed-html";
 
 const AUTH_COOKIE_NAME = "auth";
 
+function setAuthCookie(
+  setCookie: (
+    name: string,
+    value: string,
+    options?: SetCookieOptions | undefined
+  ) => void,
+  response: AdminInitiateAuthCommandOutput
+) {
+  const date = new Date();
+  date.setDate(date.getDate() + 30); // 30 days from now (refresh token expiration date)
+
+  setCookie(
+    AUTH_COOKIE_NAME,
+    JSON.stringify({
+      AccessToken: response.AuthenticationResult?.AccessToken,
+      IdToken: response.AuthenticationResult?.IdToken,
+      RefreshToken: response.AuthenticationResult?.RefreshToken,
+    }),
+    {
+      httpOnly: true,
+      expires: date,
+    }
+  );
+}
+
 const app = new Elysia()
   .use(html())
   .use(cookie())
   .get("/cookie", async ({ setCookie, cookie }) => {
     const sampleTokensObject = {
-      AccessToken:
-        "eyJraWQiOiIzMEt6Z3V6MjNvNjBraHFubDNYZ0Vkck9CMkpxV3FaWmREQ09Ud1F1NXpZPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiIwYzRjNDk0Zi1lZjc5LTQyOTQtYTkwMS0xZTg1ZGNlYTUzZDciLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAudXMtZWFzdC0yLmFtYXpvbmF3cy5jb21cL3VzLWVhc3QtMl9rRW1vclJ2RUgiLCJjbGllbnRfaWQiOiI1N2gyN2JrOWQ3NWRrM3Y0a2k1c3ZwNWVyNiIsIm9yaWdpbl9qdGkiOiI3YmQ3YmU5Ni1mZDNiLTRlODAtYjAxZS1mOThlYWM4OWQ3ZjMiLCJldmVudF9pZCI6Ijc5NTc4NTI1LWI5OWYtNDE3ZC1iZWQ5LTIwNTgzZTU2NzdlMSIsInRva2VuX3VzZSI6ImFjY2VzcyIsInNjb3BlIjoiYXdzLmNvZ25pdG8uc2lnbmluLnVzZXIuYWRtaW4iLCJhdXRoX3RpbWUiOjE2OTk5MzE3NDYsImV4cCI6MTY5OTkzNTM0NiwiaWF0IjoxNjk5OTMxNzQ2LCJqdGkiOiI0MzJhZjhjNy1hYmFhLTRkZjAtYmY4OS1iNGIzOGJkZDI4OTIiLCJ1c2VybmFtZSI6IjBjNGM0OTRmLWVmNzktNDI5NC1hOTAxLTFlODVkY2VhNTNkNyJ9.DF-1PxYTf-RJH-raQvNoBXspathEIj5nLn67AjN2w2P3WVxPfXuqz3CQ_g_F2QGgJilWvtM166QuIZMhgJss7ZDIVyuOWkmkN89L6bwM6tijJPxYGQ_M9yAktTyBpdVVbYAu-4SRiXh5RJMRfWn6_gBp2godU6Xisy3D4YfWBgOMjq5aIodCIZXt-gkP8klHbVNWmmpMRdtCwovbE17X_r8akb94rrLnROODcl9R_joIJKI1iKa-JufmDoFXogfb5pzdH5UCz0wJPIDvf_gOohKVWntzVNDg73LXMnJeH-8_F1866Smj9r8QTXWWBmPwsusrYuJrIo8kN0tpmw70-g",
-      IdToken:
-        "eyJraWQiOiJkSDNyR0pLY3RNTStFNjRweGFSYWVlSmRCcHYwd2Y0YnRmMUloYnhmYkswPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiIwYzRjNDk0Zi1lZjc5LTQyOTQtYTkwMS0xZTg1ZGNlYTUzZDciLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6XC9cL2NvZ25pdG8taWRwLnVzLWVhc3QtMi5hbWF6b25hd3MuY29tXC91cy1lYXN0LTJfa0Vtb3JSdkVIIiwiY29nbml0bzp1c2VybmFtZSI6IjBjNGM0OTRmLWVmNzktNDI5NC1hOTAxLTFlODVkY2VhNTNkNyIsIm9yaWdpbl9qdGkiOiI3YmQ3YmU5Ni1mZDNiLTRlODAtYjAxZS1mOThlYWM4OWQ3ZjMiLCJhdWQiOiI1N2gyN2JrOWQ3NWRrM3Y0a2k1c3ZwNWVyNiIsImV2ZW50X2lkIjoiNzk1Nzg1MjUtYjk5Zi00MTdkLWJlZDktMjA1ODNlNTY3N2UxIiwidG9rZW5fdXNlIjoiaWQiLCJhdXRoX3RpbWUiOjE2OTk5MzE3NDYsIm5hbWUiOiJhbmRyZXMgZmVybmFuZGV6IiwiZXhwIjoxNjk5OTM1MzQ2LCJpYXQiOjE2OTk5MzE3NDYsImp0aSI6ImY2NmMwMWI2LWNhNmItNGRlYi05NzIwLWE4NGMyNjM1YzViNCIsImVtYWlsIjoiYW5kcmVzLmZlcm5hbmRleituYW1lQG1lZGxpZnkuY29tIn0.U0Nh-r2iyfN3ijiMAULzJ-auxvBrNYE7eJdba0_aTarrd0PCN_QuXD_XWREikKNu3XmPlld6JUqRSNJQ1k_APrugj4TW9xJoeUHywtgMNGFiSnPhSE0lQyr6TjeG5Y2aJjJokNoUeubwP5Q83fbsc15O2jt6Oh90OjA7nU0JssGDBSYc7H1ehM5hDTQSXxJS6zC8ycRJVj5dJjSqYL59powx6W_TBQP-0Hd6mimuLZbbmRqjNU1K8z3erVpfjH0fGueSTMdVJocLZqfo-9wN5aM4g-_Mrf_5HzvcHERoa_HwOhObPp_xyZKPHk9lypypzgmFAmjHVtgGIZNKbvn5XA",
-      RefreshToken:
-        "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAifQ.ZuOFKONeG0_g04RKQWPdN4SyJhll1oorHP9rqRCBMIHtG_8fHobmFBAN6c_ykTzaAyNWf7AcuXPwugJO8S6eHV02VvFuyI1kSYxCOQUUniHz_Yq3fnykVb_nDS4w786HlBNL0hbvHO69VCxBVSIKvki9ggHYpjPaO0fFNAi2eUYOofH7a8v3FcRXYFnuO2ekgfWhSePmGzY1vkawuEzzqzDoIDIfg1mdV0s7NxEy-AiLA08eSaQyGHKcH-cnDzVGuepgM_1S8PWGpqbvTe8H7LgMY5k_pXsvxd3u3fNlSUCVRumvm7nF8u-yY84u5kOiETDqpqUokAynrB9FqBjxxA.rMwbEC-wO2_no7ja.y9BM0gN26hT-poilRZuEamipKT4XCi_AtNHBbT-YZh4hSSCJXQzPJL2laNHAYAc6WLzOZ2QucrPoK-H02ZoKW369eWnv6lRfwPJfNLKvpY8qOGGVxsgEXGsDqsYGAHwKp1WZ_zcdIA22Yr5xUuIAQowmwZ_XiEeQZD9rnoofFRveJ8boWLnhSkW-BkjfGb5CNAL4MCu_Tc3SrEuLPcmi0S0POq-F-hQNcKuueZCTbB2GQeTNCmOheWYffJkf3MDw4PAfygGK1Gq74INsyOSP9rMVQGGhreatAKIFmsIenywkSxpRxEjiNOfoWo4LqxOHD_ao1k9dtovM9aoVTt_fQb5EnQTvpLfpdUqhu9QbpbbVxRQM_EttoqXWc5njT4pwW2cV9jr5-JeXl8_Zh8XkWBkuUPnUtPNeyMBeoT08B8E1f8g5hjgJbKzHhWEAsInpTLuHuxjyV0a2ZAV8FmReRyOljRZiW_rZeN1GY20G4LUmM0Vbm6POpsZWz2CVQBLlPOegLXeP5rUddSaAv4jZVxYxelbVqRfa-JyXdUuL-B32f785zLt7ZgPkDZ4EHmfa2VEFfPWMlxj4FqDvAC666zQhDmrDQhBtj9hd8IdIKHq1c-TUKlRO2YygHGhufQXR22pLH099zGCTotxtPnFTZplXkSN78esA7ZmCfszPRMj-TNE5jKFpvGaUbFUFwDhRK6m_qdEiFFs1wtCyTAGX_fQVe2AE69yOTBElRDhZlnVV4KUSscnFIolg3xt0C78eZFXEo7Px17MYIENqOXxUf_9N9ysfr8nrJFFds7OdNt5QsYF36GF2lkQBloGUE-wTCzuHVYm4HVKdwHhy2lVxYLMdQuHnyu-v8QGsbDPgZ5zirGzfJxLlMIjYGfgslmu21TMMxmaxxPOGDarPz-y5HxthX9LzRLFD_yE-DTQ4jh8p2KzIVLuRZr-9FQFmNlOQI4AhBCl6ITyrKUKuoK0h_82tznLRl6ESIdGOMBm0lTrGFCfedgz97NbKrSmTNV1eKbxS_AuIZTiUVhWHGj9bHZJhOQU8qOcRuvgg7_C4FrWH3QLhIZ3t8nKZDHVRaFWsuFNVfKDJt9piKD343PrwvZtq5nOL3isaoZaIObMia7J6SXqv9761YKdKctYwjTmHaxCXgnmHannm8uwX-kKb8gb9-gygo98VzTQto-lt4k7yWGUVk3FxBM-MpPo7JelQqhMdLKDkMbHGWGDv8CFBZthc7NSiY9ZCDNXoPg1EfHS3vJ4VA6Ze-m48z4qAPIJrOE2g65KGhXpUZcR7pr2YhLZoHGBDj7ut43aSCG5myFsZWhu_zjXWUZPn0Fk.RqNhBbj4uaqNMLUtjKfObw",
-      // ExpiresIn: 3600,
-      // TokenType: "Bearer",
+      $metadata: {},
+      AuthenticationResult: {
+        AccessToken:
+          "eyJraWQiOiIzMEt6Z3V6MjNvNjBraHFubDNYZ0Vkck9CMkpxV3FaWmREQ09Ud1F1NXpZPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiIwYzRjNDk0Zi1lZjc5LTQyOTQtYTkwMS0xZTg1ZGNlYTUzZDciLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAudXMtZWFzdC0yLmFtYXpvbmF3cy5jb21cL3VzLWVhc3QtMl9rRW1vclJ2RUgiLCJjbGllbnRfaWQiOiI1N2gyN2JrOWQ3NWRrM3Y0a2k1c3ZwNWVyNiIsIm9yaWdpbl9qdGkiOiI3YmQ3YmU5Ni1mZDNiLTRlODAtYjAxZS1mOThlYWM4OWQ3ZjMiLCJldmVudF9pZCI6Ijc5NTc4NTI1LWI5OWYtNDE3ZC1iZWQ5LTIwNTgzZTU2NzdlMSIsInRva2VuX3VzZSI6ImFjY2VzcyIsInNjb3BlIjoiYXdzLmNvZ25pdG8uc2lnbmluLnVzZXIuYWRtaW4iLCJhdXRoX3RpbWUiOjE2OTk5MzE3NDYsImV4cCI6MTY5OTkzNTM0NiwiaWF0IjoxNjk5OTMxNzQ2LCJqdGkiOiI0MzJhZjhjNy1hYmFhLTRkZjAtYmY4OS1iNGIzOGJkZDI4OTIiLCJ1c2VybmFtZSI6IjBjNGM0OTRmLWVmNzktNDI5NC1hOTAxLTFlODVkY2VhNTNkNyJ9.DF-1PxYTf-RJH-raQvNoBXspathEIj5nLn67AjN2w2P3WVxPfXuqz3CQ_g_F2QGgJilWvtM166QuIZMhgJss7ZDIVyuOWkmkN89L6bwM6tijJPxYGQ_M9yAktTyBpdVVbYAu-4SRiXh5RJMRfWn6_gBp2godU6Xisy3D4YfWBgOMjq5aIodCIZXt-gkP8klHbVNWmmpMRdtCwovbE17X_r8akb94rrLnROODcl9R_joIJKI1iKa-JufmDoFXogfb5pzdH5UCz0wJPIDvf_gOohKVWntzVNDg73LXMnJeH-8_F1866Smj9r8QTXWWBmPwsusrYuJrIo8kN0tpmw70-g",
+        IdToken:
+          "eyJraWQiOiJkSDNyR0pLY3RNTStFNjRweGFSYWVlSmRCcHYwd2Y0YnRmMUloYnhmYkswPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiIwYzRjNDk0Zi1lZjc5LTQyOTQtYTkwMS0xZTg1ZGNlYTUzZDciLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6XC9cL2NvZ25pdG8taWRwLnVzLWVhc3QtMi5hbWF6b25hd3MuY29tXC91cy1lYXN0LTJfa0Vtb3JSdkVIIiwiY29nbml0bzp1c2VybmFtZSI6IjBjNGM0OTRmLWVmNzktNDI5NC1hOTAxLTFlODVkY2VhNTNkNyIsIm9yaWdpbl9qdGkiOiI3YmQ3YmU5Ni1mZDNiLTRlODAtYjAxZS1mOThlYWM4OWQ3ZjMiLCJhdWQiOiI1N2gyN2JrOWQ3NWRrM3Y0a2k1c3ZwNWVyNiIsImV2ZW50X2lkIjoiNzk1Nzg1MjUtYjk5Zi00MTdkLWJlZDktMjA1ODNlNTY3N2UxIiwidG9rZW5fdXNlIjoiaWQiLCJhdXRoX3RpbWUiOjE2OTk5MzE3NDYsIm5hbWUiOiJhbmRyZXMgZmVybmFuZGV6IiwiZXhwIjoxNjk5OTM1MzQ2LCJpYXQiOjE2OTk5MzE3NDYsImp0aSI6ImY2NmMwMWI2LWNhNmItNGRlYi05NzIwLWE4NGMyNjM1YzViNCIsImVtYWlsIjoiYW5kcmVzLmZlcm5hbmRleituYW1lQG1lZGxpZnkuY29tIn0.U0Nh-r2iyfN3ijiMAULzJ-auxvBrNYE7eJdba0_aTarrd0PCN_QuXD_XWREikKNu3XmPlld6JUqRSNJQ1k_APrugj4TW9xJoeUHywtgMNGFiSnPhSE0lQyr6TjeG5Y2aJjJokNoUeubwP5Q83fbsc15O2jt6Oh90OjA7nU0JssGDBSYc7H1ehM5hDTQSXxJS6zC8ycRJVj5dJjSqYL59powx6W_TBQP-0Hd6mimuLZbbmRqjNU1K8z3erVpfjH0fGueSTMdVJocLZqfo-9wN5aM4g-_Mrf_5HzvcHERoa_HwOhObPp_xyZKPHk9lypypzgmFAmjHVtgGIZNKbvn5XA",
+        RefreshToken:
+          "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAifQ.ZuOFKONeG0_g04RKQWPdN4SyJhll1oorHP9rqRCBMIHtG_8fHobmFBAN6c_ykTzaAyNWf7AcuXPwugJO8S6eHV02VvFuyI1kSYxCOQUUniHz_Yq3fnykVb_nDS4w786HlBNL0hbvHO69VCxBVSIKvki9ggHYpjPaO0fFNAi2eUYOofH7a8v3FcRXYFnuO2ekgfWhSePmGzY1vkawuEzzqzDoIDIfg1mdV0s7NxEy-AiLA08eSaQyGHKcH-cnDzVGuepgM_1S8PWGpqbvTe8H7LgMY5k_pXsvxd3u3fNlSUCVRumvm7nF8u-yY84u5kOiETDqpqUokAynrB9FqBjxxA.rMwbEC-wO2_no7ja.y9BM0gN26hT-poilRZuEamipKT4XCi_AtNHBbT-YZh4hSSCJXQzPJL2laNHAYAc6WLzOZ2QucrPoK-H02ZoKW369eWnv6lRfwPJfNLKvpY8qOGGVxsgEXGsDqsYGAHwKp1WZ_zcdIA22Yr5xUuIAQowmwZ_XiEeQZD9rnoofFRveJ8boWLnhSkW-BkjfGb5CNAL4MCu_Tc3SrEuLPcmi0S0POq-F-hQNcKuueZCTbB2GQeTNCmOheWYffJkf3MDw4PAfygGK1Gq74INsyOSP9rMVQGGhreatAKIFmsIenywkSxpRxEjiNOfoWo4LqxOHD_ao1k9dtovM9aoVTt_fQb5EnQTvpLfpdUqhu9QbpbbVxRQM_EttoqXWc5njT4pwW2cV9jr5-JeXl8_Zh8XkWBkuUPnUtPNeyMBeoT08B8E1f8g5hjgJbKzHhWEAsInpTLuHuxjyV0a2ZAV8FmReRyOljRZiW_rZeN1GY20G4LUmM0Vbm6POpsZWz2CVQBLlPOegLXeP5rUddSaAv4jZVxYxelbVqRfa-JyXdUuL-B32f785zLt7ZgPkDZ4EHmfa2VEFfPWMlxj4FqDvAC666zQhDmrDQhBtj9hd8IdIKHq1c-TUKlRO2YygHGhufQXR22pLH099zGCTotxtPnFTZplXkSN78esA7ZmCfszPRMj-TNE5jKFpvGaUbFUFwDhRK6m_qdEiFFs1wtCyTAGX_fQVe2AE69yOTBElRDhZlnVV4KUSscnFIolg3xt0C78eZFXEo7Px17MYIENqOXxUf_9N9ysfr8nrJFFds7OdNt5QsYF36GF2lkQBloGUE-wTCzuHVYm4HVKdwHhy2lVxYLMdQuHnyu-v8QGsbDPgZ5zirGzfJxLlMIjYGfgslmu21TMMxmaxxPOGDarPz-y5HxthX9LzRLFD_yE-DTQ4jh8p2KzIVLuRZr-9FQFmNlOQI4AhBCl6ITyrKUKuoK0h_82tznLRl6ESIdGOMBm0lTrGFCfedgz97NbKrSmTNV1eKbxS_AuIZTiUVhWHGj9bHZJhOQU8qOcRuvgg7_C4FrWH3QLhIZ3t8nKZDHVRaFWsuFNVfKDJt9piKD343PrwvZtq5nOL3isaoZaIObMia7J6SXqv9761YKdKctYwjTmHaxCXgnmHannm8uwX-kKb8gb9-gygo98VzTQto-lt4k7yWGUVk3FxBM-MpPo7JelQqhMdLKDkMbHGWGDv8CFBZthc7NSiY9ZCDNXoPg1EfHS3vJ4VA6Ze-m48z4qAPIJrOE2g65KGhXpUZcR7pr2YhLZoHGBDj7ut43aSCG5myFsZWhu_zjXWUZPn0Fk.RqNhBbj4uaqNMLUtjKfObw",
+        ExpiresIn: 3600,
+        TokenType: "Bearer",
+      },
     };
-    setCookie(AUTH_COOKIE_NAME, JSON.stringify(sampleTokensObject), {
-      httpOnly: true,
-    });
+    setAuthCookie(setCookie, sampleTokensObject);
     return (
       <BaseHtml>
         <h1>cookie '{AUTH_COOKIE_NAME}' set to:</h1>
@@ -425,21 +452,7 @@ const app = new Elysia()
 
     try {
       const response = await client.send(signInCommand);
-      const date = new Date();
-      date.setDate(date.getDate() + 30); // 30 days from now (refresh token expiration date)
-
-      setCookie(
-        AUTH_COOKIE_NAME,
-        JSON.stringify({
-          AccessToken: response.AuthenticationResult?.AccessToken,
-          IdToken: response.AuthenticationResult?.IdToken,
-          RefreshToken: response.AuthenticationResult?.RefreshToken,
-        }),
-        {
-          httpOnly: true,
-          expires: date,
-        }
-      );
+      setAuthCookie(setCookie, response);
       return (
         <pre class="text-green-600 w-screen overflow-x-auto">
           {JSON.stringify(response, null, 3)}
@@ -931,7 +944,7 @@ const app = new Elysia()
       </form>
     </>
   ))
-  .post("/passwordless-sign-in", async ({ body }) => {
+  .post("/passwordless-sign-in", async ({ body, setCookie }) => {
     const { email } = body as {
       email: string;
     };
@@ -967,8 +980,9 @@ const app = new Elysia()
       const passwordlessSignInResponse = await client.send(
         passwordlessSignInCommand
       );
+      setAuthCookie(setCookie, passwordlessSignInResponse);
       return (
-        <div class="text-green-600">
+        <div class="text-green-600 w-screen overflow-x-auto">
           <h1>passwordless sign in response:</h1>
           <pre>{JSON.stringify(passwordlessSignInResponse, null, 3)}</pre>
         </div>
