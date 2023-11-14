@@ -11,17 +11,48 @@ import {
   RevokeTokenCommand,
   SignUpCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
-import html from "@elysiajs/html";
-import crypto from "crypto";
 import { Elysia } from "elysia";
+import { cookie } from "@elysiajs/cookie";
+import { html } from "@elysiajs/html";
+import crypto from "crypto";
 import * as elements from "typed-html";
 
 const app = new Elysia()
   .use(html())
-  .get("/", () => (
+  .use(cookie())
+  .get("/cookie", async ({ setCookie, cookie }) => {
+    const testObj = { att1: "hello", att2: "world", att3: 69 };
+    setCookie("htmxElysiaCookie", JSON.stringify(testObj));
+    return (
+      <BaseHtml>
+        <h1>cookie "htmxElysiaCookie" set to value:</h1>
+        <pre>
+          {JSON.stringify(JSON.parse(cookie.htmxElysiaCookie), null, 2)}
+        </pre>
+        <form
+          class="flex flex-col space-y-2"
+          hx-delete="/cookie"
+          hx-target="body"
+        >
+          <button type="submit" class="border border-black w-fit">
+            delete cookie
+          </button>
+        </form>
+      </BaseHtml>
+    );
+  })
+  .delete("/cookie", async ({ removeCookie }) => {
+    removeCookie("htmxElysiaCookie");
+
+    return <h1>cookie "htmxElysiaCookie" deleted</h1>;
+  })
+  .get("/", ({ cookie }) => (
     <BaseHtml>
       <body class="flex flex-col space-x-2 w-full h-screen justify-center items-center">
         <h1>Bun + Elysia + htmx + cognito</h1>
+        <h2 hx-get="/cookie" hx-target="body">
+          value of "htmxElysiaCookie": {cookie.htmxElysiaCookie ?? "falsy 😵"}
+        </h2>
         <div class="flex flex-row space-x-3">
           <button
             hx-get="/sign-up"
